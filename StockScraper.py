@@ -1,7 +1,11 @@
 import praw
-import datetime
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 import re
 import csv
+
+app = Flask(__name__)
+CORS(app)
 
 reddit = praw.Reddit()
 
@@ -14,14 +18,15 @@ stringList.append("Apple buys stock")
 stringList.append("$Apple buys stock")
 stringList.append("Apple$ buys stock")
 stringList.append("Stocks Apple buys")
-stringList.append("Stocks pineapple buys")
-pattern = r'(?:^|\s|\$)' + re.escape("Apple") + r'(?=\s|$|\'s)?'
+stringList.append("Stocks pineApple buys")
+stringList.append("Stocks AppleTree buys")
+pattern = r'(?:^|\s|\$)' + "Apple" + r'(?=\$|\'s|:|\s|$)'
 
 for string in stringList:
      match = re.search(pattern, string)
      print(f"string: {string}, result: {match}")
-     
 '''
+     
 
 # Creates dictionary of stock tickers and their multiple variations.
 with open(r"F:\Projects\StockMentions\StockMentions\NASDAQ Name Extraction\StockVariations.csv", 'r') as file:
@@ -30,7 +35,7 @@ with open(r"F:\Projects\StockMentions\StockMentions\NASDAQ Name Extraction\Stock
     for row in reader:
         stockTicker = row[0] # Eg. "AAPL"
 
-        if stockTicker == "Ticker(Key)": #ignores the labels row
+        if stockTicker == "Ticker(Key)": # ignores the labels row
             continue
         
         stockList[stockTicker] = [] # start the list
@@ -47,16 +52,30 @@ with open(r"F:\Projects\StockMentions\StockMentions\NASDAQ Name Extraction\Stock
             except IndexError:
                 break
 
+combinedPatterns = {}
+for stockName, variations in stockList.items():
+    if len(stockName) <= 2:
+        continue
+    combined = r'(?:^|\s|\$)' + '|'.join(re.escape(variation) for variation in variations) + r'(?=\$|\'s|:|\s|$)'
+    combinedPatterns[stockName] = re.compile(combined) # pre-compile for big performance boost
+
 mentions = dict.fromkeys(stockList.keys(), 0) # Tracks results
 
-def getMentions(subredditName, numberOfPosts):
+def getMentions(subredditName, numberOfPosts, sortingMethod):
     subreddit = reddit.subreddit(subredditName)
     
-    hotPosts = subreddit.hot(limit=numberOfPosts)
+    if sortingMethod.lower() == "hot":
+        posts = subreddit.hot(limit=numberOfPosts)
+    elif sortingMethod.lower() == "new":
+        posts = subreddit.new(limit=numberOfPosts)
+    elif sortingMethod.lower() == "top":
+        posts = subreddit.top(limit=numberOfPosts) 
+    elif sortingMethod.lower() == "rising":
+        posts = subreddit.rising(limit=numberOfPosts)
+
 
     # go through every post
-    for post in hotPosts:
-        # Avoids memes
+    for post in posts:
         if post.link_flair_text == "Meme":
             continue
 
@@ -65,47 +84,57 @@ def getMentions(subredditName, numberOfPosts):
 
         print(title)
 
-        # Cycles through our list of stock symbols
-        for stockName in stockList.keys():
-            # Cycles through variations of stock symbols
-            if len(stockName) == 1:
-                continue
-            for variation in stockList[stockName]:
+        for stockName, pattern in combinedPatterns.items():
+            if pattern.search(title) or pattern.search(body):
+                mentions[stockName] += 1
+                print(f"found {stockName}")
+        
 
-                regexPattern = r'(?:^|\s|\$)' + re.escape(variation) + r'(?=\s|$|\'s)?'
-                # OLD REGEX PATTERNS
-                # r'(?:\s|\b|\$)' + re.escape(variation) + r'(?:\s|\b|\$|\'s)?'
-                # r'(?:\b|\$)' + re.escape(variation) + r'(?:\b|\$)'
-                # r'\s+\$?' + variation + r'\$?\s+'
+# Scraping multiple investing subreddits
+def multiScrape(postLimit, sortingMethod, minimumMentions):
+    for key in mentions.keys(): # Resets data
+        mentions[key] = 0
 
-                '''
-                matchesTitle = re.findall(regexPattern, title)
-                matchesBody = re.findall(regexPattern, body)
-                mentions[stockName] += len(matchesTitle) + len(matchesBody)
-                '''
-                
-                if re.search(regexPattern, title) or re.search(regexPattern, body):
-                    mentions[stockName] += 1
-                    print(f"found {stockName}")
-                
-                #maybe search in comments as well?
+    subreddits = ["wallstreetbets", "stockmarket", "investing", "stocks", "options",
+                   "robinhood", "securityanalysis", "daytrading"]
+
+    for subreddit in subreddits:
+        getMentions(subreddit, postLimit, sortingMethod)
+
+    mentionsFound = {}
+
+    # Make smaller dictionary with actual found values for sorting
+    for stockName in mentions:
+        if mentions[stockName] >= minimumMentions:
+            mentionsFound[stockName] = mentions[stockName]
+
+    print("\n\n-RESULTS-")
+    # Sorts and prints
+    sortedList = dict(sorted(mentionsFound.items(), key=lambda item: item[1], reverse=True))
+    for key in sortedList:
+        print(f"{key}: {sortedList[key]}")
+    
+    return sortedList
 
 
-# Obtaining Mentions
-getMentions("wallstreetbets", 20)
-getMentions("stockmarket", 20)
-getMentions("investing", 20)
-getMentions("stocks", 20)
-getMentions("options", 20)
-getMentions("robinhood", 20)
-getMentions("securityanalysis", 20)
-getMentions("daytrading", 20)
+@app.route('/mentions')
+def flaskFunction():
+    postLimit = int(request.args.get('postLimit'))
+    sortingMethod = request.args.get('sortingMethod')
+    minimumMentions = int(request.args.get('minMentions'))
 
-# sort results
-# Could write this onto a file very easily
-print("\n\n-RESULTS-")
+    sortedDict = multiScrape(postLimit, sortingMethod, minimumMentions)
+    
+    stocks = []
+    mentionsFound = []
+ 
+    for key, value in sortedDict.items():
+        stocks.append(key)
+        mentionsFound.append(value)
 
-for stockName in mentions:
-    # Avoids inevitable margin of error
-    if mentions[stockName] > 3:
-        print(f"{stockName}: {mentions[stockName]}")
+    response = {"stocks": stocks, "mentions": mentionsFound}
+    
+    return response
+
+if __name__ == '__main__':
+    app.run(debug=True)
