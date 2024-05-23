@@ -1,0 +1,101 @@
+div{
+    text-align: center;
+}
+
+table{
+    max-width: fit-content;
+    margin-top: 1vw;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+body{
+    background-color: black;
+    color: white;
+    font-size: 1.5vw;
+}
+
+.title {
+    font-size: 10vw;
+    margin-top: 5vw;
+    margin-bottom: 2vw;
+}
+
+label {
+    margin-top: 1vw;
+    margin-right: 1vw;
+    padding-bottom: 2vw;
+}
+
+input {
+    text-align: center;
+    width: 40px;
+    height: 20px;
+    font-size: 16px;
+}
+
+select {
+    text-align: center;
+    width: 70px;
+    height: 25px;
+    font-size: 16px;
+}
+
+button {
+    padding: 0.6em 2em;
+    font-size: 1.2vw;
+    border: none;
+    outline: none;
+    color: rgb(255, 255, 255);
+    background: #111;
+    cursor: pointer;
+    position: relative;
+    z-index: 0;
+    border-radius: 10px;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+  }
+  
+  button:before {
+    content: "";
+    background: linear-gradient(
+      45deg,
+      #ffffff,
+      #570191,
+      #ffffff
+    );
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    background-size: 400%;
+    z-index: -1;
+    filter: blur(5px);
+    -webkit-filter: blur(5px);
+    width: calc(100% + 4px);
+    height: calc(100% + 4px);
+    animation: button 20s linear infinite;
+    transition: opacity 0.3s ease-in-out;
+    border-radius: 10px;
+  }
+  
+  @keyframes button {
+    0% {
+      background-position: 0 0;
+    }
+    100% {
+      background-position: 400% 0;
+    }
+  }
+  
+  button:after {
+    z-index: -1;
+    content: "";
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: #222;
+    left: 0;
+    top: 0;
+    border-radius: 10px;
+  }
